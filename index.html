@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TA LYRICS</title>
+<style>
+:root{--bg:#000;--p:#121212;--l:#2b2b2b;--t:#ececec;--m:#8c8c8c;--g:#3ddc84;--gd:#1f6b42}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:15px/1.45 system-ui,"Segoe UI",Roboto,sans-serif;padding:12px;max-width:980px;margin:auto}
+h1{font-size:22px;margin:4px 0 2px;color:var(--g);letter-spacing:.5px}
+h2{font-size:16px;margin:0 0 8px}
+.sub{color:var(--m);margin:0 0 12px;font-size:13px}
+section{background:var(--p);border:1px solid var(--l);border-radius:10px;padding:12px;margin-bottom:12px}
+button,select,input{font:inherit;color:var(--t);background:#1c1c1c;border:1px solid var(--l);border-radius:8px;padding:9px 12px;min-height:40px}
+button{cursor:pointer}button:hover{border-color:var(--g)}
+button.pri{background:var(--g);color:#000;border-color:var(--g);font-weight:600}
+button:disabled{opacity:.4;cursor:default}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.m{color:var(--m);font-size:13px}
+#status{margin-top:8px;min-height:20px}
+#status.err{color:#ff6b6b}
+#prog{height:6px;background:#1c1c1c;border-radius:3px;margin-top:6px;overflow:hidden}
+#prog i{display:block;height:100%;width:0;background:var(--g)}
+video{width:100%;max-height:260px;background:#000;border-radius:8px;display:none}
+#ov{min-height:64px;text-align:center;font-size:22px;padding:10px;font-weight:600}
+#ov span{color:#666}#ov span.on{color:var(--g)}
+.wv{position:relative;height:90px;margin-top:8px;touch-action:none}
+canvas{width:100%;height:90px;display:block;background:#0a0a0a;border-radius:8px}
+#ph{position:absolute;top:0;bottom:0;width:2px;background:var(--g);left:0;pointer-events:none}
+.row{display:grid;grid-template-columns:26px 1fr 74px 74px;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--l)}
+.row.act{background:#0f1f16}
+.row .n{color:var(--m);text-align:center}
+.row .ops{grid-column:2/5;display:flex;gap:6px;flex-wrap:wrap}
+.row input{width:100%;padding:6px 8px;min-height:36px}
+.row .ops button{padding:5px 10px;min-height:34px}
+.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.f label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--m)}
+.note{border-left:3px solid var(--g);padding:6px 10px;background:#0c140f;font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+<h1>TA LYRICS</h1>
+<p class="sub">Âm thanh/video → lời bài hát có mốc thời gian → XML Alight Motion</p>
+
+<section>
+<h2>1. Chọn tệp</h2>
+<div class="bar">
+<input type="file" id="file" accept="audio/*,video/*">
+<select id="lang"><option value="vietnamese">Tiếng Việt</option><option value="english">English</option><option value="japanese">日本語</option><option value="korean">한국어</option><option value="chinese">中文</option></select>
+<button class="pri" id="go" disabled>Nhận dạng lời</button>
+</div>
+<div class="note">Nhận dạng chạy <b>ngay trên máy bạn</b> (Whisper qua WebAssembly). Tệp nhạc/video <b>không</b> được tải lên đâu cả. Chỉ mô hình AI (~100 MB) được tải một lần từ huggingface.co và lưu trong bộ nhớ trình duyệt.</div>
+<div id="status" class="m"></div><div id="prog"><i></i></div>
+<div id="info" class="m"></div>
+</section>
+
+<section>
+<h2>2. Xem trước &amp; dạng sóng</h2>
+<video id="med" controls playsinline></video>
+<audio id="aud" controls style="width:100%;display:none"></audio>
+<div id="ov"></div>
+<div class="wv"><canvas id="wave"></canvas><div id="ph"></div></div>
+</section>
+
+<section>
+<h2>3. Lời bài hát</h2>
+<div class="bar"><button id="undo">Hoàn tác</button><button id="redo">Làm lại</button><button id="add">+ Thêm dòng tại vị trí phát</button></div>
+<div id="rows"></div>
+</section>
+
+<section>
+<h2>4. Xuất tệp</h2>
+<div class="f">
+<label>Rộng<input id="w" type="number" value="1920"></label>
+<label>Cao<input id="h" type="number" value="1080"></label>
+<label>FPS<select id="fps"><option>24</option><option>30</option><option>48</option><option selected>60</option></select></label>
+<label>Cỡ chữ<input id="size" type="number" value="18" step="1"></label>
+<label>Lệch dọc (px)<input id="oy" type="number" value="0"></label>
+<label>Thuộc tính chứa chữ<input id="attr" value="text"></label>
+</div>
+<p class="m"><label><input type="checkbox" id="w2l"> Tách từ thành layer (mặc định tắt: 1 dòng = 1 text layer)</label></p>
+<div class="bar"><button class="pri" id="xml">Tải XML</button><button id="lrc">Tải LRC</button><button id="json">Tải JSON</button></div>
+<div class="note">Giới hạn đã biết: tệp mẫu của bạn chưa cho thấy chữ được lưu ở thuộc tính nào, nên tên <code>text</code> ở trên là <b>chưa xác minh</b>. Nếu Alight Motion mở ra layer rỗng, hãy sửa tên thuộc tính theo tệp mẫu có chữ. Karaoke từng từ chỉ nằm trong JSON, chưa ghi vào XML. XML không có layer audio vì cần đường dẫn <code>content://</code> trên điện thoại.</div>
+<div id="xs" class="m"></div>
+</section>
+
+<script type="module">
+const $=s=>document.querySelector(s);
+const med=$('#med'),aud=$('#aud');
+let el=aud,lines=[],pcm=null,dur=0,hist=[],fut=[],url=null,peaks=null,fname='lyrics';
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const status=(m,e)=>{$('#status').textContent=m;$('#status').className='m'+(e?' err':'')};
+const prog=p=>$('#prog i').style.width=Math.round(p*100)+'%';
+
+/* ---------- history ---------- */
+const snap=()=>{hist.push(JSON.stringify(lines));if(hist.length>100)hist.shift();fut=[]};
+$('#undo').onclick=()=>{if(!hist.length)return;fut.push(JSON.stringify(lines));lines=JSON.parse(hist.pop());render()};
+$('#redo').onclick=()=>{if(!fut.length)return;hist.push(JSON.stringify(lines));lines=JSON.parse(fut.pop());render()};
+
+/* ---------- load + decode ---------- */
+$('#file').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  fname=f.name.replace(/\.[^.]+$/,'');pcm=null;peaks=null;lines=[];hist=[];fut=[];render();
+  $('#go').disabled=true;prog(0);status('Đang giải mã âm thanh…');
+  if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(f);
+  try{
+    const isVid=f.type.startsWith('video')||/\.(mp4|mov|webm|mkv|avi)$/i.test(f.name);
+    med.style.display=isVid?'block':'none';aud.style.display=isVid?'none':'block';
+    el=isVid?med:aud;med.removeAttribute('src');aud.removeAttribute('src');el.src=url;
+    const ac=new (window.AudioContext||window.webkitAudioContext)();
+    const buf=await ac.decodeAudioData(await f.arrayBuffer());ac.close();
+    dur=buf.duration;
+    const oc=new OfflineAudioContext(1,Math.ceil(dur*16000),16000);
+    const s=oc.createBufferSource();s.buffer=buf;s.connect(oc.destination);s.start();
+    pcm=(await oc.startRendering()).getChannelData(0);
+    $('#info').textContent=`${f.type||'không rõ MIME'} · ${dur.toFixed(1)} giây · ${buf.sampleRate} Hz · ${buf.numberOfChannels} kênh · ${(f.size/1048576).toFixed(1)} MB`;
+    status('Sẵn sàng. Bấm "Nhận dạng lời".');$('#go').disabled=false;drawWave();
+  }catch(err){status('Trình duyệt không giải mã được tệp này (codec không hỗ trợ hoặc tệp hỏng). Thử chuyển sang MP3/WAV/MP4 (AAC).',1);console.error(err)}
+};
+
+/* ---------- transcription ---------- */
+let asr=null;
+$('#go').onclick=async()=>{
+  if(!pcm)return;$('#go').disabled=true;prog(0);
+  try{
+    if(!asr){
+      status('Đang tải mô hình Whisper (lần đầu hơi lâu)…');
+      const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+      asr=await pipeline('automatic-speech-recognition','onnx-community/whisper-base_timestamped',{
+        device:'wasm',progress_callback:p=>{if(p.status==='progress')prog(p.progress/100)}});
+    }
+    status('Đang nhận dạng lời trên máy bạn… (không đóng trang)');prog(0.02);
+    const out=await asr(pcm,{language:$('#lang').value,task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
+    let words=(out.chunks||[]).map(c=>({text:c.text.trim(),start:c.timestamp[0],end:c.timestamp[1]})).filter(w=>w.text);
+    words.forEach((w,i)=>{if(w.end==null||w.end<w.start)w.end=words[i+1]?words[i+1].start:w.start+.3});
+    if(!words.length)throw new Error('Không nhận ra lời nào. Thử chọn đúng ngôn ngữ hoặc dùng bản nhạc rõ giọng hơn.');
+    snap();lines=segment(words);render();prog(1);
+    status(`Xong: ${words.length} từ, ${lines.length} dòng. Bạn có thể sửa bên dưới.`);
+  }catch(err){status('Lỗi nhận dạng: '+(err.message||err)+' — bấm lại để thử lại.',1);console.error(err)}
+  $('#go').disabled=false;
+};
+
+function segment(words){
+  const out=[];let cur=[];
+  for(const w of words){
+    const p=cur[cur.length-1];
+    if(p&&(w.start-p.end>0.7||cur.length>=8||/[.!?,;]$/.test(p.text))){out.push(cur);cur=[]}
+    cur.push(w);
+  }
+  if(cur.length)out.push(cur);
+  return out.map(ws=>({text:ws.map(w=>w.text).join(' '),start:ws[0].start,end:ws[ws.length-1].end,words:ws}));
+}
+const spread=(text,s,e)=>{const t=text.split(/\s+/).filter(Boolean),d=(e-s)/Math.max(t.length,1);return t.map((x,i)=>({text:x,start:s+i*d,end:s+(i+1)*d}))};
+
+/* ---------- editor ---------- */
+function render(){
+  const box=$('#rows');box.innerHTML='';
+  lines.forEach((l,i)=>{
+    const r=document.createElement('div');r.className='row';r.dataset.i=i;
+    r.innerHTML=`<div class="n">${i+1}</div><input class="tx" value="${esc(l.text)}"><input class="s" type="number" step="0.01" value="${l.start.toFixed(2)}"><input class="e" type="number" step="0.01" value="${l.end.toFixed(2)}"><div class="ops"><button data-a="seek">▶ Phát</button><button data-a="split">Tách</button><button data-a="merge">Gộp dòng dưới</button><button data-a="del">Xoá</button><span class="m">${l.words.length} từ · ${(l.end-l.start).toFixed(2)}s</span></div>`;
+    r.querySelector('.tx').onchange=ev=>{snap();l.text=ev.target.value;l.words=spread(l.text,l.start,l.end);render()};
+    const retime=()=>{const ns=+r.querySelector('.s').value,ne=+r.querySelector('.e').value;if(ne<=ns)return render();
+      snap();const k=(ne-ns)/Math.max(l.end-l.start,.001);l.words.forEach(w=>{w.start=ns+(w.start-l.start)*k;w.end=ns+(w.end-l.start)*k});l.start=ns;l.end=ne;render()};
+    r.querySelector('.s').onchange=retime;r.querySelector('.e').onchange=retime;
+    r.querySelectorAll('button').forEach(b=>b.onclick=()=>act(b.dataset.a,i));
+    box.appendChild(r);
+  });
+  drawWave();
+}
+function act(a,i){
+  const l=lines[i];
+  if(a==='seek'){el.currentTime=l.start;el.play();return}
+  snap();
+  if(a==='del')lines.splice(i,1);
+  if(a==='split'){if(l.words.length<2){hist.pop();return}
+    const k=Math.ceil(l.words.length/2),a1=l.words.slice(0,k),b1=l.words.slice(k);
+    lines.splice(i,1,{text:a1.map(w=>w.text).join(' '),start:a1[0].start,end:a1.at(-1).end,words:a1},{text:b1.map(w=>w.text).join(' '),start:b1[0].start,end:b1.at(-1).end,words:b1})}
+  if(a==='merge'){const n=lines[i+1];if(!n){hist.pop();return}
+    const ws=l.words.concat(n.words);lines.splice(i,2,{text:l.text+' '+n.text,start:l.start,end:n.end,words:ws})}
+  render();
+}
+$('#add').onclick=()=>{snap();const t=el.currentTime||0;const text='Dòng mới';
+  lines.push({text,start:t,end:t+2,words:spread(text,t,t+2)});lines.sort((a,b)=>a.start-b.start);render()};
+
+/* ---------- waveform + preview ---------- */
+function drawWave(){
+  const c=$('#wave'),W=c.width=Math.max(300,c.clientWidth*devicePixelRatio),H=c.height=90*devicePixelRatio,x=c.getContext('2d');
+  x.clearRect(0,0,W,H);if(!pcm||!dur)return;
+  lines.forEach(l=>{x.fillStyle='#12301f';x.fillRect(l.start/dur*W,0,Math.max(2,(l.end-l.start)/dur*W),H)});
+  if(!peaks||peaks.length!==W){peaks=new Float32Array(W);const step=Math.floor(pcm.length/W)||1;
+    for(let i=0;i<W;i++){let m=0;for(let j=0;j<step;j+=Math.max(1,step>>5))m=Math.max(m,Math.abs(pcm[i*step+j]||0));peaks[i]=m}}
+  x.fillStyle='#3ddc84';
+  for(let i=0;i<W;i++){const h=peaks[i]*H*.95;x.fillRect(i,(H-h)/2,1,Math.max(1,h))}
+}
+window.addEventListener('resize',()=>{peaks=null;drawWave()});
+$('#wave').onpointerdown=e=>{const r=e.target.getBoundingClientRect();if(dur)el.currentTime=(e.clientX-r.left)/r.width*dur};
+function tick(){
+  const t=el.currentTime||0;
+  $('#ph').style.left=(dur?t/dur*100:0)+'%';
+  const i=lines.findIndex(l=>t>=l.start&&t<=l.end);
+  document.querySelectorAll('.row').forEach((r,k)=>r.classList.toggle('act',k===i));
+  const ov=$('#ov');
+  if(i<0){ov.innerHTML=''}else{ov.innerHTML=lines[i].words.map(w=>`<span class="${t>=w.start?'on':''}">${esc(w.text)}</span>`).join(' ')}
+  requestAnimationFrame(tick);
+}
+tick();
+
+/* ---------- export ---------- */
+function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const need=()=>{if(!lines.length){$('#xs').textContent='Chưa có lời để xuất.';return false}return true};
+$('#lrc').onclick=()=>{if(!need())return;
+  const f=t=>{const m=Math.floor(t/60),s=t-m*60;return `[${String(m).padStart(2,'0')}:${s.toFixed(2).padStart(5,'0')}]`};
+  dl(fname+'.lrc',lines.map(l=>f(l.start)+l.text).join('\n'),'text/plain')};
+$('#json').onclick=()=>{if(!need())return;
+  dl(fname+'.json',JSON.stringify({project:{width:+$('#w').value,height:+$('#h').value,fps:+$('#fps').value,duration:dur},lines},null,2),'application/json')};
+$('#xml').onclick=()=>{
+  if(!need())return;
+  try{
+    const W=+$('#w').value,H=+$('#h').value,fps=+$('#fps').value,size=+$('#size').value,oy=+$('#oy').value,attr=$('#attr').value.trim()||'text';
+    if(!(W>0&&H>0))throw new Error('Kích thước không hợp lệ');
+    if(!/^[A-Za-z_][\w.-]*$/.test(attr))throw new Error('Tên thuộc tính không hợp lệ');
+    const items=$('#w2l').checked?lines.flatMap(l=>l.words):lines;
+    const total=Math.round(Math.max(dur,...items.map(i=>i.end))*1000);
+    const ms=v=>Math.round(v*1000);
+    let x=`<?xml version='1.0' encoding='UTF-8' ?>\r\n<scene title="${esc(fname)}" width="${W}" height="${H}" exportWidth="${W}" exportHeight="${H}" precompose="dynamicResolution" bgcolor="#ff000000" totalTime="${total}" fps="${fps}" modifiedTime="${Date.now()}" amver="106019" ffver="106" am="com.am.nxkfamx/5.0.161.106019" amplatform="android" retime="freeze" retimeAdaptFPS="false">\r\n`;
+    items.forEach((it,i)=>{
+      x+=`  <text id="${102400000+i}" label="${esc(it.text)}" ${attr}="${esc(it.text)}" startTime="${ms(it.start)}" endTime="${ms(it.end)}" fillType="color" mediaFillMode="fill" size="${size.toFixed(6)}" font="googlefonts?name=Roboto&amp;weight=400" wrapWidth="${Math.round(5397*W/1920)}" align="center">\r\n    <transform>\r\n      <location value="${(W/2).toFixed(6)},${(H/2+oy).toFixed(6)},0.000000" />\r\n    </transform>\r\n  </text>\r\n`});
+    x+='</scene>';
+    const d=new DOMParser().parseFromString(x,'application/xml');
+    if(d.querySelector('parsererror'))throw new Error('XML tạo ra không hợp lệ');
+    if(d.querySelectorAll('text').length!==items.length)throw new Error('Số layer không khớp số dòng');
+    dl(fname+'.xml',x,'application/xml');
+    $('#xs').textContent=`Đã xác thực XML: ${items.length} text layer (${$('#w2l').checked?'mỗi từ một layer':'mỗi dòng một layer'}).`;
+  }catch(err){$('#xs').textContent='Không xuất được XML: '+err.message}
+};
+</script>
+</body>
+</html>
