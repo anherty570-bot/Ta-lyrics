@@ -77,11 +77,10 @@ canvas{width:100%;height:90px;display:block;background:#0a0a0a;border-radius:8px
 <label>FPS<select id="fps"><option>24</option><option>30</option><option>48</option><option selected>60</option></select></label>
 <label>Cỡ chữ<input id="size" type="number" value="18" step="1"></label>
 <label>Lệch dọc (px)<input id="oy" type="number" value="0"></label>
-<label>Thuộc tính chứa chữ<input id="attr" value="text"></label>
+<label>Độ đậm chữ<select id="wt"><option>400</option><option selected>700</option><option>900</option></select></label>
 </div>
 <p class="m"><label><input type="checkbox" id="w2l"> Tách từ thành layer (mặc định tắt: 1 dòng = 1 text layer)</label></p>
 <div class="bar"><button class="pri" id="xml">Tải XML</button><button id="lrc">Tải LRC</button><button id="json">Tải JSON</button></div>
-<div class="note">Giới hạn đã biết: tệp mẫu của bạn chưa cho thấy chữ được lưu ở thuộc tính nào, nên tên <code>text</code> ở trên là <b>chưa xác minh</b>. Nếu Alight Motion mở ra layer rỗng, hãy sửa tên thuộc tính theo tệp mẫu có chữ. Karaoke từng từ chỉ nằm trong JSON, chưa ghi vào XML. XML không có layer audio vì cần đường dẫn <code>content://</code> trên điện thoại.</div>
 <div id="xs" class="m"></div>
 </section>
 
@@ -217,19 +216,20 @@ $('#json').onclick=()=>{if(!need())return;
 $('#xml').onclick=()=>{
   if(!need())return;
   try{
-    const W=+$('#w').value,H=+$('#h').value,fps=+$('#fps').value,size=+$('#size').value,oy=+$('#oy').value,attr=$('#attr').value.trim()||'text';
+    const W=+$('#w').value,H=+$('#h').value,fps=+$('#fps').value,size=+$('#size').value,oy=+$('#oy').value,wt=$('#wt').value;
     if(!(W>0&&H>0))throw new Error('Kích thước không hợp lệ');
-    if(!/^[A-Za-z_][\w.-]*$/.test(attr))throw new Error('Tên thuộc tính không hợp lệ');
     const items=$('#w2l').checked?lines.flatMap(l=>l.words):lines;
     const total=Math.round(Math.max(dur,...items.map(i=>i.end))*1000);
     const ms=v=>Math.round(v*1000);
     let x=`<?xml version='1.0' encoding='UTF-8' ?>\r\n<scene title="${esc(fname)}" width="${W}" height="${H}" exportWidth="${W}" exportHeight="${H}" precompose="dynamicResolution" bgcolor="#ff000000" totalTime="${total}" fps="${fps}" modifiedTime="${Date.now()}" amver="106019" ffver="106" am="com.am.nxkfamx/5.0.161.106019" amplatform="android" retime="freeze" retimeAdaptFPS="false">\r\n`;
     items.forEach((it,i)=>{
-      x+=`  <text id="${102400000+i}" label="${esc(it.text)}" ${attr}="${esc(it.text)}" startTime="${ms(it.start)}" endTime="${ms(it.end)}" fillType="color" mediaFillMode="fill" size="${size.toFixed(6)}" font="googlefonts?name=Roboto&amp;weight=400" wrapWidth="${Math.round(5397*W/1920)}" align="center">\r\n    <transform>\r\n      <location value="${(W/2).toFixed(6)},${(H/2+oy).toFixed(6)},0.000000" />\r\n    </transform>\r\n  </text>\r\n`});
+      x+=`  <text id="${102400000+i}" startTime="${ms(it.start)}" endTime="${ms(it.end)}" fillType="color" mediaFillMode="fill" size="${size.toFixed(6)}" font="googlefonts?name=Roboto&amp;weight=${wt}" wrapWidth="${Math.round(5397*W/1920)}" align="center">\r\n    <transform>\r\n      <location value="${(W/2).toFixed(6)},${(H/2+oy).toFixed(6)},0.000000" />\r\n    </transform>\r\n    <content>${esc(it.text)}</content>\r\n  </text>\r\n`});
     x+='</scene>';
     const d=new DOMParser().parseFromString(x,'application/xml');
     if(d.querySelector('parsererror'))throw new Error('XML tạo ra không hợp lệ');
-    if(d.querySelectorAll('text').length!==items.length)throw new Error('Số layer không khớp số dòng');
+    const tl=[...d.querySelectorAll('text')];
+    if(tl.length!==items.length)throw new Error('Số layer không khớp số dòng');
+    if(tl.some((t,i)=>t.querySelector('content').textContent!==items[i].text))throw new Error('Nội dung chữ không khớp');
     dl(fname+'.xml',x,'application/xml');
     $('#xs').textContent=`Đã xác thực XML: ${items.length} text layer (${$('#w2l').checked?'mỗi từ một layer':'mỗi dòng một layer'}).`;
   }catch(err){$('#xs').textContent='Không xuất được XML: '+err.message}
